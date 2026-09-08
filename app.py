@@ -74,21 +74,21 @@ def clear_chat():
 
 def get_ai_response(client, messages: list, system_prompt: str) -> str:
     """
-    Send the full conversation history to Gemini using the Chat API
-    and return the reply text.
+    Send the full conversation history to Gemini and return the reply.
 
-    We use client.chats.create() with history so the model remembers
-    the entire conversation, then send the latest user message.
-
-    Args:
-        client:        The authenticated Gemini Client.
-        messages:      List of {"role": ..., "content": ...} dicts.
-        system_prompt: The system instruction string.
-
-    Returns:
-        The assistant's reply as a plain string.
+    Tries multiple models in order. If one is overloaded (503) or
+    unavailable (404), it automatically falls back to the next one.
     """
-    # Convert previous messages (all except the last one) into Gemini history
+    # Models tried in order — first available one wins
+    MODELS = [
+        "gemini-flash-latest",
+        "gemini-flash-lite-latest",
+        "gemini-2.5-flash-lite",
+        "gemini-2.5-flash",
+        "gemini-pro-latest",
+    ]
+
+    # Convert previous messages (all except last) into Gemini history format
     # Gemini uses "user" and "model" roles (not "user" and "assistant")
     history = []
     for msg in messages[:-1]:   # all but the last message
@@ -100,34 +100,48 @@ def get_ai_response(client, messages: list, system_prompt: str) -> str:
             )
         )
 
-    # Create a chat session with the full prior history
-    chat = client.chats.create(
-        model="gemini-flash-latest",       # Stable alias — auto-routes to available capacity
-        config=types.GenerateContentConfig(
-            system_instruction=system_prompt,
-            temperature=0.7,        # 0 = focused, 1 = creative
-            max_output_tokens=1024, # Safety cap on response length
-        ),
-        history=history,
-    )
+    last_error = None
 
-    # Send only the latest user message
-    response = chat.send_message(messages[-1]["content"])
+    for model_name in MODELS:
+        try:
+            # Create a chat session with full prior history
+            chat = client.chats.create(
+                model=model_name,
+                config=types.GenerateContentConfig(
+                    system_instruction=system_prompt,
+                    temperature=0.7,
+                    max_output_tokens=1024,
+                ),
+                history=history,
+            )
 
-    # Gemini 3.x returns multi-part responses (thinking + text).
-    # We iterate parts and return the last non-empty text part.
-    if response.candidates:
-        for candidate in response.candidates:
-            parts_text = [
-                part.text
-                for part in candidate.content.parts
-                if hasattr(part, "text") and part.text
-            ]
-            if parts_text:
-                return parts_text[-1]   # last part = final answer
+            # Send only the latest user message
+            response = chat.send_message(messages[-1]["content"])
 
-    # Fallback if nothing found
-    return "I couldn't generate a response. Please try again."
+            # Gemini can return multi-part responses (thinking + text).
+            # Iterate parts and return the last non-empty text part.
+            if response.candidates:
+                for candidate in response.candidates:
+                    parts_text = [
+                        part.text
+                        for part in candidate.content.parts
+                        if hasattr(part, "text") and part.text
+                    ]
+                    if parts_text:
+                        return parts_text[-1]
+
+            continue  # no text found, try next model
+
+        except Exception as e:
+            err_str = str(e)
+            # 503 = overloaded, 404 = not found → silently try next model
+            if any(code in err_str for code in ["503", "UNAVAILABLE", "404", "NOT_FOUND"]):
+                last_error = e
+                continue
+            raise  # re-raise unexpected errors (bad key, network, etc.)
+
+    # All models exhausted
+    raise last_error or Exception("All Gemini models are currently unavailable. Please try again in a moment.")
 
 
 def render_sidebar():
