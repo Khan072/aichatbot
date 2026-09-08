@@ -102,7 +102,7 @@ def get_ai_response(client, messages: list, system_prompt: str) -> str:
 
     # Create a chat session with the full prior history
     chat = client.chats.create(
-        model="gemini-3.6-flash",
+        model="gemini-flash-latest",       # Stable alias — auto-routes to available capacity
         config=types.GenerateContentConfig(
             system_instruction=system_prompt,
             temperature=0.7,        # 0 = focused, 1 = creative
@@ -148,7 +148,7 @@ def render_sidebar():
             | Layer | Technology |
             |-------|-----------|
             | UI | Streamlit |
-            | LLM | Gemini 3.6 Flash |
+            | LLM | Gemini Flash (Latest) |
             | Language | Python 3.11+ |
             | Secrets | python-dotenv |
             | Memory | st.session_state |
@@ -192,7 +192,7 @@ def main():
 
     # -- Step C: Page header -----------------------------------------------------
     st.title("💬 AI Chatbot")
-    st.caption("Powered by Google Gemini 3.6 Flash · Ask me anything!")
+    st.caption("Powered by Google Gemini Flash · Ask me anything!")
 
     # -- Step D: Validate the API key early -------------------------------------
     client = get_gemini_client()
