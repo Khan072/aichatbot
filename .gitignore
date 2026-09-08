@@ -1,0 +1,24 @@
+# =============================================================
+# .gitignore  —  Files Git should never track
+# =============================================================
+
+# --- Secrets ---
+# The .env file holds your API key. NEVER commit this.
+.env
+
+# --- Virtual Environment ---
+# The venv/ folder is huge and machine-specific; always regenerate it
+# with `pip install -r requirements.txt` instead of committing it.
+venv/
+
+# --- Python Bytecode Cache ---
+# Python auto-generates these; they are not part of your source code.
+__pycache__/
+*.pyc
+*.pyo
+
+# --- OS / Editor Junk ---
+.DS_Store
+Thumbs.db
+.vscode/
+*.swp
